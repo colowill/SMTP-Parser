@@ -1,20 +1,45 @@
-# String import used to return ASCII val of a char
 import sys
 import string
 
+"""
+@author: Will Minor
 
-# var to hold string of SMPT cmd that parser checks validity of
+
+Parser developed to validate SMTP commands
+
+SMTP (Simple Mail Transfer Protocol) is a protocol used for sending messages from a mail server or a mail client (i.e. gmail) to another mail server.
+
+Commands are constrained by the following grammar:
+
+<mail-from-cmd> ::= “MAIL” <whitespace> “FROM:” <nullspace> <reverse-path> <nullspace> <CRLF>
+"""
+
+
+"""
+cmd (String): the file or input of SMTP commands to parse and validate
+
+Uncomment (1) to input from a file via command:  'python parse.py < <file_name.txt>'
+Uncomment (2) to input from keyboard
+"""
+
+"""(1)"""
 cmd = sys.stdin.read()
-#cmd = input("Type a cmd")
-# array to hold dec values of special ASCII vals
+"""(2)"""
+#cmd = input("Type an SMTP command\n")
+
+
+# Array to hold list of  dec values of special ASCII vals
 ascii_special_arr = [60, 62, 40, 41, 91, 93, 92, 46, 44, 59, 58, 64, 34]
 
-# Index of the current character being evaluated in the parser
+# Index of the current character being evaluated by the parser
 c = 0
 
+# Default status message indicating a parse was completed with no errors
 status_message = "Sender ok"
 
+# Bool flag that raises when an error in the parse is detected
 error_exists = False
+
 
 def curr_char():
     """
@@ -61,20 +86,39 @@ def error_msg(error_msg):
 
     
 def set_status_msg(msg):
+    """
+    Helper function to set the global status_message
+
+    Args:
+        msg (String): Status message to be set
+    """
     global status_message
     status_message = msg
 
 
 def print_status_msg():
+    """
+    Helper function that prints global status_message
+    """
     global status_message
     print(status_message)
 
 
-def echo_cmd(index1, index2):
-    print(cmd[index1:index2].rstrip('\n'))
+def echo_cmd(starting_index):
+    """
+    Prints the current command being evaluated by the parser
+
+    Args:
+        index1 (int): Starting index of the parse (c), should be stored by a temp variable in parse_main()
+    """
+    global c
+    print(cmd[starting_index:c].rstrip('\n'))
 
 
 def skip_to_crlf():
+    """
+    In the case that an error is detected before parse_crlf(), this func is called to skip to <crlf>
+    """
     global c
 
     while c < len(cmd) and curr_char() != '\n':
@@ -108,13 +152,18 @@ def parse_main():
 
         parse_nullspace()
         
+        """
+        If-else block ensures that multiple commands issued in one newline are flagged as <CRLF> error
+        """
         if error_exists:
             skip_to_crlf()
         else:
             parse_crlf()
+            if error_exists:
+                skip_to_crlf()
             error_msg("Sender ok")
         
-        echo_cmd(start_index, c)
+        echo_cmd(start_index)
 
         print_status_msg()
 
@@ -189,6 +238,12 @@ def parse_from():
 
 
 def parse_crlf():
+    """
+    Parses <CRLF> indicating the end of an SMTP command line, if valid consumes it
+
+    Errors:
+        If the command line does not terminate with CRLF
+    """
     if curr_char() != '\n':
         error_msg("ERROR -- CRLF")
     else:
@@ -198,25 +253,37 @@ def parse_crlf():
 def parse_nullspace():
     """
     Essentially the same as parse_whitespace(), but allows null inputs
+    
     If curr_char() is a <whitespace> calls parse_whitespace() to recursively consume it
     """
     if curr_char() == ' ' or curr_char() == '\t':
         parse_whitespace()
 
 
+def valid_letter(character):
+    """
+    Validates if a char is a lowercase (a-z) or uppercase (A-Z) letter
+
+    Assigns ascii_val to the ASCII decimal of curr char, and checks if in range of a valid letter
+
+    Returns:
+        bool: True if character is a letter
+              False if not
+    """
+    ascii_val = ord(character)
+
+    return ascii_val in range(65,91) or ascii_val in range(97,123)
+
+
 def parse_letter():
     """
-    Checks if curr character is an uppercase or lowercase letter then consumes it
-
-    Assigns ascii_val to the ASCII decimal of curr char, and checks if in range of (A-Z) or (a-z)
+    Parses <letter> then consumes it
 
     Returns:
         bool: True if curr char is a letter
               False if not
     """
-    ascii_val = ord(curr_char())
-    
-    if ascii_val in range(65,91) or ascii_val in range(97,123):
+    if valid_letter(curr_char()):
         consume(1)
         return True
 
@@ -360,14 +427,25 @@ def parse_element():
         bool: True if one of above conditions are valid
               False if not
     """
+    global c
     if parse_letter():
+        c-=1
         parse_name()
         return True
-
+    
     return False
 
-
 def parse_domain():
+    """
+    Parses <domain> which can be composed of one element or consecutive elements with '.' between them
+
+    Calls <parse_element> to ensure one valid element, then recusrively calls itself if '.' is detected
+
+    Returns:
+        bool:
+            True is elements are arranged correctly
+            False if not
+    """
     if not parse_element():
         return False
     
@@ -379,7 +457,17 @@ def parse_domain():
 
 
 def parse_mailbox():
-   
+    """
+    Parses <mailbox> in the form: <local-part> + '@' + <domain>
+
+    Calls <parse_local_part> to validate the local-part, checks for the '@'
+    separator, then calls <parse_domain> to validate the domain portion.
+
+    Errors:
+        If <local-part> is invalid
+        If '@' separator is missing
+        If <domain> is invalid
+    """ 
     if not parse_local_part():
         error_msg("ERROR -- string")
     
@@ -393,6 +481,17 @@ def parse_mailbox():
 
 
 def parse_path():
+    """
+    Parses <path> in the form: '<' +  <mailbox> + '>'
+
+    Ensures the path begins with '<', calls <parse_mailbox> to validate the
+    enclosed mailbox, and ensures the path ends with '>'.
+
+    Errors:
+        If opening '<' is missing
+        If <mailbox> is malformed
+        If closing '>' is missing
+    """
     if curr_char() != '<':
         error_msg("ERROR -- path")
     else:
@@ -414,4 +513,3 @@ try:
     parse_main()
 except IndexError:
     print("ERROR -- msg index")
-wminor@comp431-1sp26:~/HW1$ 
