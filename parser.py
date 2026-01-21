@@ -23,9 +23,9 @@ Uncomment (2) to input from keyboard
 """
 
 """(1)"""
-cmd = sys.stdin.read()
+#cmd = sys.stdin.read()
 """(2)"""
-#cmd = input("Type an SMTP command\n")
+cmd = input("Type an SMTP command\n")
 
 
 # Array to hold list of  dec values of special ASCII vals
@@ -127,16 +127,34 @@ def skip_to_crlf():
     if c < len(cmd):
         c+=1
 
+MAIL_STATE = 0
+RCPT_STATE = 1
+RCPT_STATE = 2
+
+
+def valid_syntax():
+
+
+
 
 def parse_main():
+     
+    check_state(MAIL_STATE)
+
+    parse_mail_from_cmd()
+
+    next_state()
+
+    parse_rcpt_to_cmd()
+
+
+def parse_mail_from_cmd():
     """
-    Main parser that calls other recursive descent functions
+    Parser that calls recursive descent functions for 'MAIL FROM:' SMTP commands
     """
     while not c >= len(cmd):
         
         global error_exists
-
-        error_exists = False
 
         start_index = c
 
@@ -151,7 +169,7 @@ def parse_main():
         parse_reverse_path()
 
         parse_nullspace()
-        
+
         """
         If-else block ensures that multiple commands issued in one newline are flagged as <CRLF> error
         """
@@ -162,23 +180,92 @@ def parse_main():
             if error_exists:
                 skip_to_crlf()
             error_msg("Sender ok")
+            next_state()
         
         echo_cmd(start_index)
 
         print_status_msg()
+        
+        # likely need tweeking
+        error_exists = False
+
+
+def parse_rcpt_to_cmd():
+    
+    global c, error_exists
+
+    start_index = c
+
+    parse_rcpt()
+
+    parse_whitespace()
+
+    parse_to()
+
+    parse_nullspace()
+
+    parse_reverse_path()
+
+    if error_exists:
+        skip_to_crlf()
+    else:
+        parse_crlf()
+        if error_exists:
+             skip_to_crlf()
+        error_msg("Sender ok")
+        next_state()
+
+    echo_cmd(start_index)
+
+    print_status_msg()
+
+    error_exists = False
+
+
+def parse_main():
+     
+    parse_mail_from_cmd()
+
+    next_state()
+
+    parse_rcpt_to_cmd()
+
+
+def valid_mail():
+    """
+    Validates that the first 4 characters of MAIL FROM cmd are 'MAIL', also used in check_state()
+    Returns:
+        bool: True if first 4 chars are 'MAIL'
+    """
+    global c
+    return cmd[c:c+4] == "MAIL"
+
 
 
 def parse_mail():
     """
-    Ensures first 4 chars of cmd are 'MAIL' and consumes
+    Ensures first 4 chars of MAIL FROM cmd are 'MAIL' and consumes
 
     Errors:
-        If start of input is missing 'MAIL' 
+        If start of cmd is missing 'MAIL' 
     """
-    if not cmd[:4] == "MAIL":
-        error_msg("ERROR - mail-from-cmd")
-    else:
-        consume(4)
+    #check_state(MAIL)
+    if not valid_mail():
+        error_msg("500 Syntax error: command unrecognized")
+    consume(4)
+
+
+def parse_rcpt():
+    """
+    Ensures first 4 chars of an RCPT cmd is the string 'RCPT' and consumes
+
+    Errors:
+        If start of cmd is missing 'RCPT' 
+    """
+    global c
+    if not cmd[c:c+4] == "RCPT":
+        error_msg("500 Syntax error: command unrecognized")
+    consume(4)
 
 
 def valid_sp(): 
@@ -218,7 +305,7 @@ def parse_whitespace():
         If current character is not a tab or space
     """
     if not parse_sp():
-        error_msg("ERROR -- whitespace")
+        error_msg("500 Syntax error: command unrecognized")
 
     if valid_sp():
         parse_whitespace()
@@ -226,15 +313,28 @@ def parse_whitespace():
 
 def parse_from(): 
     """
-    Ensures next 5 chars after <whitespace> are 'MAIL' and consumes
+    Ensures next 5 chars after <whitespace> in <mail-from-cmd> are 'FROM:' and consumes
 
     Errors:
-        If start of cmd is missing 'MAIL' 
+        If  cmd is missing 'FROM' 
     """
+    global c
     if not cmd[c:c+5] == "FROM:":
-        error_msg("ERROR -- mail-from-cmd")
-    else:
-        consume(5)
+        error_msg("500 Syntax error: command unrecognized")
+    consume(5)
+
+
+def parse_to():
+    """
+    Ensures next 3 chars after <whitespace> in <rcpt-to-cmd> are 'TO:' and consumes
+
+    Errors:
+        If cmd is missing 'TO:'
+    """
+    global c
+    if not cmd[c:c+3] == "TO:":
+        error_msg("500 Syntax error: command unrecognized")
+    consume(3)
 
 
 def parse_crlf():
@@ -245,7 +345,7 @@ def parse_crlf():
         If the command line does not terminate with CRLF
     """
     if curr_char() != '\n':
-        error_msg("ERROR -- CRLF")
+        error_msg("501 Syntax error in parameters or arguments")
     else:
         consume(1)
 
@@ -469,15 +569,15 @@ def parse_mailbox():
         If <domain> is invalid
     """ 
     if not parse_local_part():
-        error_msg("ERROR -- string")
+        error_msg("501 Syntax error in parameters or arguments")
     
     if curr_char() == '@':
         consume(1)
     else: 
-        error_msg("ERROR -- mailbox")
+        error_msg("501 Syntax error in parameters or arguments")
     
     if not parse_domain():
-        error_msg("ERROR -- element")
+        error_msg("501 Syntax error in parameters or arguments")
 
 
 def parse_path():
@@ -500,7 +600,7 @@ def parse_path():
     parse_mailbox()
 
     if curr_char() != '>':
-        error_msg("ERROR -- path")
+        error_msg("501 Syntax error in parameters or arguments")
     else:
         consume(1)
 
