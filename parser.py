@@ -127,26 +127,6 @@ def skip_to_crlf():
     if c < len(cmd):
         c+=1
 
-MAIL_STATE = 0
-RCPT_STATE = 1
-RCPT_STATE = 2
-
-
-def valid_syntax():
-
-
-
-
-def parse_main():
-     
-    check_state(MAIL_STATE)
-
-    parse_mail_from_cmd()
-
-    next_state()
-
-    parse_rcpt_to_cmd()
-
 
 def parse_mail_from_cmd():
     """
@@ -217,18 +197,91 @@ def parse_rcpt_to_cmd():
 
     echo_cmd(start_index)
 
-    print_status_msg()
+    #print_status_msg()
 
     error_exists = False
 
 
-def parse_main():
-     
-    parse_mail_from_cmd()
+def parse_main(): 
 
-    next_state()
+	expect_state(MAIL_STATE)
 
-    parse_rcpt_to_cmd()
+	print_status_msg()
+
+	parse_mail_from_cmd()
+
+	print_status_msg()
+
+
+def valid_cmd():
+	if valid_mail_cmd():
+		return MAIL_STATE
+	elif valid_rcpt_cmd():
+		return RCPT_STATE
+	elif valid_data_cmd():
+		return DATA_STATE
+	else:
+		return -1
+
+
+def expect_state(STATE):
+	if valid_cmd() == -1:
+		error_msg("SYNTAX ERROR")
+	elif valid_cmd() != STATE:
+		error_msg("bad state")
+	else:
+		print("YES")
+
+
+def valid_mail_cmd():
+	"""
+	Checks that the next cmd input is a 'MAIL FROM:' cmd
+	"""
+	global c, error_exists
+	temp = c
+	parse_mail()
+	parse_whitespace()
+	parse_from()
+	c = temp
+
+	valid = not error_exists
+	error_exists = False
+	return valid
+
+
+def valid_rcpt_cmd():
+	"""
+	Checks that the next cmd input is a 'RCPT TO:' cmd
+	"""
+	global c, error_exists
+	temp = c
+	parse_rcpt()
+	parse_whitespace()
+	parse_to()
+	c = temp
+
+	valid = not error_exists
+	error_exists = False
+	return valid
+
+
+def valid_data_cmd():
+	"""
+	Checks that the next cmd input is a 'RCPT TO:' cmd
+	"""
+	global c, error_exists
+	temp = c
+	parse_data()
+	c = temp
+
+	valid = not error_exists
+	error_exists = False
+	return valid
+
+
+MAIL_STATE = 0
+RCPT_STATE = 1
+DATA_STATE = 2
 
 
 def valid_mail():
@@ -239,7 +292,6 @@ def valid_mail():
     """
     global c
     return cmd[c:c+4] == "MAIL"
-
 
 
 def parse_mail():
@@ -266,6 +318,19 @@ def parse_rcpt():
     if not cmd[c:c+4] == "RCPT":
         error_msg("500 Syntax error: command unrecognized")
     consume(4)
+
+
+def parse_data():
+	"""
+    Ensures first 4 chars of a data cmd is the string 'DATA' and consumes
+
+    Errors:
+        If start of cmd is missing 'DATA' 
+    """
+	global c
+	if not cmd[c:c+4] == "DATA":
+		error_msg("500 Syntax error: command unrecognized")
+	consume(4)
 
 
 def valid_sp(): 
@@ -593,7 +658,7 @@ def parse_path():
         If closing '>' is missing
     """
     if curr_char() != '<':
-        error_msg("ERROR -- path")
+        error_msg("501 Syntax error in parameters or arguments")
     else:
         consume(1)
     
