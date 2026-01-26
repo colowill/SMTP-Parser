@@ -23,9 +23,9 @@ Uncomment (2) to input from keyboard
 """
 
 """(1)"""
-#cmd = sys.stdin.read()
+cmd = sys.stdin.read()
 """(2)"""
-cmd = input("Type an SMTP command\n")
+#cmd = input("Type an SMTP command\n")
 
 
 # Array to hold list of  dec values of special ASCII vals
@@ -132,68 +132,116 @@ def parse_mail_from_cmd():
     """
     Parser that calls recursive descent functions for 'MAIL FROM:' SMTP commands
     """
-    while not c >= len(cmd):
         
-        global error_exists
+    global error_exists
 
+    start_index = c
+
+    parse_mail()
+
+    parse_whitespace()
+
+    parse_from()
+
+    parse_nullspace()
+
+    parse_reverse_path()
+
+    parse_nullspace()
+
+    """
+    If-else block ensures that multiple commands issued in one newline are flagged as <CRLF> error
+    """
+    if error_exists:
+        skip_to_crlf()
+    else:
+        parse_crlf()
+        if error_exists:
+            skip_to_crlf()
+        error_msg("250 OK")
+        
+    echo_cmd(start_index)
+
+    print_status_msg()
+        
+    error_exists = False
+
+
+def parse_rcpt_to_cmd():
+    
+    global c, error_exists
+    
+    while valid_cmd() == RCPT_STATE:
+        
         start_index = c
 
-        parse_mail()
+        parse_rcpt()
 
         parse_whitespace()
 
-        parse_from()
+        parse_to()
 
         parse_nullspace()
 
         parse_reverse_path()
 
-        parse_nullspace()
-
-        """
-        If-else block ensures that multiple commands issued in one newline are flagged as <CRLF> error
-        """
         if error_exists:
             skip_to_crlf()
         else:
             parse_crlf()
             if error_exists:
                 skip_to_crlf()
-            error_msg("Sender ok")
-            next_state()
-        
+            error_msg("250 ok")
+
         echo_cmd(start_index)
 
         print_status_msg()
-        
-        # likely need tweeking
+
         error_exists = False
 
 
-def parse_rcpt_to_cmd():
-    
-    global c, error_exists
+def parse_data_cmd():
 
+    global c, error_exists
+    
     start_index = c
 
-    parse_rcpt()
-
-    parse_whitespace()
-
-    parse_to()
+    parse_data()
 
     parse_nullspace()
-
-    parse_reverse_path()
 
     if error_exists:
         skip_to_crlf()
     else:
         parse_crlf()
         if error_exists:
-             skip_to_crlf()
-        error_msg("Sender ok")
-        next_state()
+            skip_to_crlf()
+        error_msg("354 Start mail input; end with <CRLF>.<CRLF>")
+
+        echo_cmd(start_index)
+
+    print_status_msg()
+
+        error_exists = False
+
+
+def parse_data_cmd():
+
+    global c, error_exists
+    
+    start_index = c
+
+    parse_data()
+
+    parse_nullspace()
+
+    if error_exists:
+        skip_to_crlf()
+    else:
+        parse_crlf()
+        if error_exists:
+            skip_to_crlf()
+        error_msg("354 Start mail input; end with <CRLF>.<CRLF>")
 
     echo_cmd(start_index)
 
@@ -202,51 +250,100 @@ def parse_rcpt_to_cmd():
     error_exists = False
 
 
-def parse_main(): 
+def parse_main():
+    
+    while not c >= len(cmd):
 
-	expect_state(MAIL_STATE)
+        if not valid_state():
+            continue
 
-	print_status_msg()
+        parse_mail_from_cmd()
+    
+        transition_state()
 
-	parse_mail_from_cmd()
+        if not valid_state():
+            continue
 
-	print_status_msg()
+        parse_rcpt_to_cmd()
+
+        transition_state()
+        
+        if not valid_state():
+            continue
+
+        parse_data_cmd()
 
 
 def valid_cmd():
-	if valid_mail_cmd():
-		return MAIL_STATE
-	elif valid_rcpt_cmd():
-		return RCPT_STATE
-	elif valid_data_cmd():
-		return DATA_STATE
-	else:
-		return -1
+    if valid_mail_cmd():
+        return MAIL_STATE
+
+    elif valid_rcpt_cmd():
+        return RCPT_STATE
+    
+    elif valid_data_cmd():
+        return DATA_STATE
+    
+    else:
+        return -1
 
 
-def expect_state(STATE):
-	if valid_cmd() == -1:
-		error_msg("SYNTAX ERROR")
-	elif valid_cmd() != STATE:
-		error_msg("bad state")
-	else:
-		print("YES")
+def valid_state():
+    global c, current_state
+    start_char = c
+    peek_state = valid_cmd()
+
+    print(peek_state)
+    if peek_state == -1:
+        error_msg("500 Syntax error: command unrecognized")
+        skip_to_crlf()
+        echo_cmd(start_char)
+        print_status_msg()
+        reset_state()
+        return False
+
+    elif peek_state != current_state:
+        error_msg(f"503 Bad sequence of commands, reseting state to {current_state}")
+        skip_to_crlf()
+        echo_cmd(start_char)
+        reset_state()
+        return False
+
+    else:
+        return True
+
+
+def reset_state():
+    global current_state
+    current_state = MAIL_STATE
+
+
+def transition_state():
+    """
+    Cycles to the next state in the state-machine by incrimenting current_state by 1. If state reaches out of bounds, calls reset_state() 
+    """
+    global current_state
+    current_state += 1
+
+    if current_state > 2:
+        reset_state()
 
 
 def valid_mail_cmd():
-	"""
-	Checks that the next cmd input is a 'MAIL FROM:' cmd
-	"""
-	global c, error_exists
-	temp = c
-	parse_mail()
-	parse_whitespace()
-	parse_from()
-	c = temp
+    """
+    Checks that the next cmd input is a 'MAIL FROM:' cmd
+    """
+    global c, error_exists
+    temp = c
+    parse_mail()
+    parse_whitespace()
+    parse_from()
+    c = temp
+    
+    valid = not error_exists
+    error_exists = False
 
-	valid = not error_exists
-	error_exists = False
-	return valid
+    return valid
 
 
 def valid_rcpt_cmd():
@@ -266,27 +363,28 @@ def valid_rcpt_cmd():
 
 
 def valid_data_cmd():
-	"""
-	Checks that the next cmd input is a 'RCPT TO:' cmd
-	"""
-	global c, error_exists
-	temp = c
-	parse_data()
-	c = temp
+    global c, error_exists
+    
+    temp = c
+    parse_data()
+    c = temp
 
-	valid = not error_exists
-	error_exists = False
-	return valid
+    valid = not error_exists
+    error_exists = False
+    return valid
 
 
 MAIL_STATE = 0
 RCPT_STATE = 1
 DATA_STATE = 2
 
+STATES = [MAIL_STATE, RCPT_STATE, DATA_STATE]
+current_state = 0
+
 
 def valid_mail():
     """
-    Validates that the first 4 characters of MAIL FROM cmd are 'MAIL', also used in check_state()
+    Validates that the first 4 characters of MAIL FROM cmd are 'MAIL'
     Returns:
         bool: True if first 4 chars are 'MAIL'
     """
@@ -301,7 +399,6 @@ def parse_mail():
     Errors:
         If start of cmd is missing 'MAIL' 
     """
-    #check_state(MAIL)
     if not valid_mail():
         error_msg("500 Syntax error: command unrecognized")
     consume(4)
@@ -318,6 +415,19 @@ def parse_rcpt():
     if not cmd[c:c+4] == "RCPT":
         error_msg("500 Syntax error: command unrecognized")
     consume(4)
+
+
+def parse_data():
+	"""
+    Ensures first 4 chars of a data cmd is the string 'DATA' and consumes
+
+    Errors:
+        If start of cmd is missing 'DATA' 
+    """
+	global c
+	if not cmd[c:c+4] == "DATA":
+		error_msg("500 Syntax error: command unrecognized")
+	consume(4)
 
 
 def parse_data():
@@ -658,6 +768,7 @@ def parse_path():
         If closing '>' is missing
     """
     if curr_char() != '<':
+        error_msg("501 Syntax error in parameters or arguments")
         error_msg("501 Syntax error in parameters or arguments")
     else:
         consume(1)
