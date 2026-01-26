@@ -163,9 +163,9 @@ def parse_mail_from_cmd():
     echo_cmd(start_index)
 
     print_status_msg()
-        
-    error_exists = False
 
+    error_exists = False
+        
 
 def parse_rcpt_to_cmd():
     
@@ -197,7 +197,7 @@ def parse_rcpt_to_cmd():
 
         print_status_msg()
 
-        error_exists = False
+    error_exists = False
 
 
 def parse_data_cmd():
@@ -225,13 +225,26 @@ def parse_data_cmd():
 
 
 def parse_data_input():
-    global c, error_exists
+    global c
 
-    while curr_char() != '\n' and next_char() != '.':
-        if c >= len(cmd):
-            break
-        print(curr_char(), end = '')
+    while c < len(cmd):
+
+        if curr_char() == '\n' and c + 2 < len(cmd):
+
+            if cmd[c+1] == '.' and cmd[c+2] == '\n':
+                print(cmd[c:c+3], end='')
+                consume(3)
+                print("250 OK")
+                reset_state()
+                return
+
+        print(curr_char(), end='')
         consume(1)
+
+    error_msg("Missing DATA terminator")
+    print_status_msg()
+    reset_state()
+        
 
 
 def parse_main():
@@ -244,22 +257,27 @@ def parse_main():
             continue
 
         parse_mail_from_cmd()
-    
+        
         transition_state()
 
         if not valid_state():
             continue
 
-        parse_rcpt_to_cmd()
+        print(current_state)
 
+        parse_rcpt_to_cmd()
+        
         transition_state()
         
+        print(error_exists)
+
         if not valid_state():
             continue
         
         parse_data_cmd()
 
-        print(error_exists)
+        if error_exists:
+            continue
 
         if error_exists:
             continue
