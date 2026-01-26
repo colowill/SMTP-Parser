@@ -171,7 +171,7 @@ def parse_rcpt_to_cmd():
     
     global c, error_exists
     
-    while valid_cmd() == RCPT_STATE:
+    while peek_cmd() == RCPT_STATE:
         
         start_index = c
 
@@ -217,43 +217,29 @@ def parse_data_cmd():
         if error_exists:
             skip_to_crlf()
         error_msg("354 Start mail input; end with <CRLF>.<CRLF>")
-
-        echo_cmd(start_index)
-
-    print_status_msg()
-
         error_exists = False
-
-
-def parse_data_cmd():
-
-    global c, error_exists
-    
-    start_index = c
-
-    parse_data()
-
-    parse_nullspace()
-
-    if error_exists:
-        skip_to_crlf()
-    else:
-        parse_crlf()
-        if error_exists:
-            skip_to_crlf()
-        error_msg("354 Start mail input; end with <CRLF>.<CRLF>")
 
     echo_cmd(start_index)
 
-    #print_status_msg()
+    print_status_msg()
 
-    error_exists = False
+
+def parse_data_input():
+    global c, error_exists
+
+    while curr_char() != '\n' and next_char() != '.':
+        if c >= len(cmd):
+            break
+        print(curr_char(), end = '')
+        consume(1)
 
 
 def parse_main():
     
-    while not c >= len(cmd):
+    global error_exists
 
+    while not c >= len(cmd):
+        
         if not valid_state():
             continue
 
@@ -270,11 +256,18 @@ def parse_main():
         
         if not valid_state():
             continue
-
+        
         parse_data_cmd()
 
+        print(error_exists)
 
-def valid_cmd():
+        if error_exists:
+            continue
+
+        parse_data_input()
+
+
+def peek_cmd():
     if valid_mail_cmd():
         return MAIL_STATE
 
@@ -285,16 +278,18 @@ def valid_cmd():
         return DATA_STATE
     
     else:
-        return -1
+        return INVALID_STATE
 
 
 def valid_state():
+    """
+    Validates the state of the program by checking what type of CMD is in the newline, by calling peek_cmd()
+    """
     global c, current_state
     start_char = c
-    peek_state = valid_cmd()
-
-    print(peek_state)
-    if peek_state == -1:
+    peek_state = peek_cmd()
+    
+    if peek_state == INVALID_STATE:
         error_msg("500 Syntax error: command unrecognized")
         skip_to_crlf()
         echo_cmd(start_char)
@@ -303,9 +298,10 @@ def valid_state():
         return False
 
     elif peek_state != current_state:
-        error_msg(f"503 Bad sequence of commands, reseting state to {current_state}")
+        error_msg(f"503 Bad sequence of commands, reseting state to expecting MAIL FROM:")
         skip_to_crlf()
         echo_cmd(start_char)
+        print_status_msg()
         reset_state()
         return False
 
@@ -314,7 +310,8 @@ def valid_state():
 
 
 def reset_state():
-    global current_state
+    global current_state, error_exists
+    error_exists = False
     current_state = MAIL_STATE
 
 
@@ -325,7 +322,7 @@ def transition_state():
     global current_state
     current_state += 1
 
-    if current_state > 2:
+    if current_state > DATA_STATE:
         reset_state()
 
 
@@ -373,10 +370,10 @@ def valid_data_cmd():
     error_exists = False
     return valid
 
-
 MAIL_STATE = 0
 RCPT_STATE = 1
 DATA_STATE = 2
+INVALID_STATE = -1
 
 STATES = [MAIL_STATE, RCPT_STATE, DATA_STATE]
 current_state = 0
@@ -415,19 +412,6 @@ def parse_rcpt():
     if not cmd[c:c+4] == "RCPT":
         error_msg("500 Syntax error: command unrecognized")
     consume(4)
-
-
-def parse_data():
-	"""
-    Ensures first 4 chars of a data cmd is the string 'DATA' and consumes
-
-    Errors:
-        If start of cmd is missing 'DATA' 
-    """
-	global c
-	if not cmd[c:c+4] == "DATA":
-		error_msg("500 Syntax error: command unrecognized")
-	consume(4)
 
 
 def parse_data():
@@ -768,7 +752,6 @@ def parse_path():
         If closing '>' is missing
     """
     if curr_char() != '<':
-        error_msg("501 Syntax error in parameters or arguments")
         error_msg("501 Syntax error in parameters or arguments")
     else:
         consume(1)
