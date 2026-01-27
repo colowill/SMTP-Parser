@@ -258,6 +258,7 @@ def parse_main():
             continue
 
         if current_state == MAIL_STATE:
+            start_index = c 
             parse_mail_from_cmd()
             if error_exists:
                 reset_state()
@@ -279,10 +280,44 @@ def parse_main():
             parse_data_cmd()
             if not error_exists:
                 parse_data_input()
+                send_to_file(start_index)
             reset_state()
 
         error_exists = False
         
+
+def send_to_file(start_index):
+    """
+    Takes a successful command and formats it to write to a file for email send
+    """
+    cmd_array = cmd[start_index:c].splitlines()
+
+    reverse_path = cmd_array[0].split('<')[1].split('>')[0]
+
+    forward_paths = []
+
+    i = 1
+
+    while cmd_array[i][0:4] != "DATA":
+        forward_paths.append(cmd_array[i].split('<')[1].split('>')[0])
+        i+=1
+
+    msg_body = []
+    
+    i+=1
+
+    while i < len(cmd_array) and cmd_array[i] != '.':
+        msg_body.append(cmd_array[i])
+        i+=1
+
+    msg_body = "\n".join(msg_body)
+    
+    for j in range(len(forward_paths)):
+        with open("forward/" + forward_paths[j], 'w') as file:
+            file.write("From: <" + reverse_path + ">\n")
+            file.write("To: <" + forward_paths[j] + ">\n")
+            file.write(msg_body)
+
 
 def peek_cmd():
     if valid_mail_cmd():
