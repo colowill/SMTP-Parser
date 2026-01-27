@@ -194,12 +194,10 @@ def parse_rcpt_to_cmd():
             if error_exists:
                 skip_to_crlf()
             error_msg("250 ok")
+            error_exists = False
 
         echo_cmd(start_index)
-
         print_status_msg()
-
-    error_exists = False
 
 
 def parse_data_cmd():
@@ -219,65 +217,66 @@ def parse_data_cmd():
         if error_exists:
             skip_to_crlf()
         error_msg("354 Start mail input; end with <CRLF>.<CRLF>")
-
+        error_exists = False
     
     echo_cmd(start_index)
 
     print_status_msg()
 
-    error_exists = False
-
 
 def parse_data_input():
     global c
+    
+    while True:
+        if c >= len(cmd):
+            break
 
-    while c < len(cmd):
+        if curr_char() == '.' and (c > 0 and cmd[c-1] == '\n'):
+            if (c + 1 < len(cmd)) and cmd[c+1] == '\n':
+                print(".")
+                consume(2)
+                print("250 OK")
+                reset_state()
+                return
         
-        if cmd[c-1] == '\n' and cmd[c] == '.' and cmd[c+1] == '\n':
-            print(cmd[c:c+1])
-            consume(2)
-            print("250 OK")
-            reset_state()
-            return
-
-        else:
-            print(curr_char(), end='')
-            consume(1)
-            
+        print(curr_char(), end='')
+        consume(1)
 
 
 def parse_main():
     
-    global error_exists
+    global error_exists, current_state
 
-    while not c >= len(cmd):
-
-
+    while c < len(cmd):
         if not valid_state():
+            error_exists = False 
             continue
 
-        parse_mail_from_cmd()
+        if current_state == MAIL_STATE:
+            parse_mail_from_cmd()
+            if error_exists:
+                reset_state()
+                error_exists = False
+                continue
+            else:
+                transition_state()
         
-        transition_state()
+        elif current_state == RCPT_STATE:
+            parse_rcpt_to_cmd()
+            if error_exists:
+                reset_state()
+                error_exists = False
+                continue
+            elif not error_exists and peek_cmd() == DATA_STATE:
+                transition_state()
 
-        if not valid_state():
-            continue
+        elif current_state == DATA_STATE:
+            parse_data_cmd()
+            if not error_exists:
+                parse_data_input()
+            reset_state()
 
-        parse_rcpt_to_cmd()
-        
-        print(curr_char())
-
-        transition_state()
-        
-        if not valid_state():
-            continue
-        
-        parse_data_cmd()
-
-        if error_exists:
-            continue
-
-        parse_data_input()
+        error_exists = False
         
 
 def peek_cmd():
@@ -324,7 +323,6 @@ def valid_state():
 
 def reset_state():
     global current_state, error_exists
-    error_exists = False
     current_state = MAIL_STATE
 
 
@@ -345,43 +343,50 @@ def valid_mail_cmd():
     """
     global c, error_exists
     temp = c
+    temp_error_exists = error_exists
+    error_exists = False
     parse_mail()
     parse_whitespace()
     parse_from()
     c = temp
     
     valid = not error_exists
-    error_exists = False
+    error_exists = temp_error_exists
 
     return valid
 
 
 def valid_rcpt_cmd():
-	"""
-	Checks that the next cmd input is a 'RCPT TO:' cmd
-	"""
-	global c, error_exists
-	temp = c
-	parse_rcpt()
-	parse_whitespace()
-	parse_to()
-	c = temp
+    """
+    Checks that the next cmd input is a 'RCPT TO:' cmd
+    """
+    global c, error_exists
+    temp = c
+    temp_error_exists = error_exists
+    error_exists = False
+    parse_rcpt()
+    parse_whitespace()
+    parse_to()
+    c = temp
 
-	valid = not error_exists
-	error_exists = False
-	return valid
+    valid = not error_exists
+    error_exists = temp_error_exists
+    return valid
 
 
 def valid_data_cmd():
     global c, error_exists
     
     temp = c
+    temp_error_exists = error_exists
+    error_exists = False
     parse_data()
     c = temp
 
     valid = not error_exists
-    error_exists = False
+    error_exists = temp_error_exists
     return valid
+
 
 MAIL_STATE = 0
 RCPT_STATE = 1
