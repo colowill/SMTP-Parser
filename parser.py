@@ -49,7 +49,7 @@ def curr_char():
         current char being evaluated by parser
     """
     if c >= len(cmd):
-        return '\n'
+        return None
     return cmd[c]
 
 
@@ -58,6 +58,8 @@ def next_char():
     Returns: 
         char that comes after current char
     """
+    if c+1 >= len(cmd):
+        return None
     return cmd[c+1]
 
 
@@ -217,34 +219,31 @@ def parse_data_cmd():
         if error_exists:
             skip_to_crlf()
         error_msg("354 Start mail input; end with <CRLF>.<CRLF>")
-        error_exists = False
 
+    
     echo_cmd(start_index)
 
     print_status_msg()
+
+    error_exists = False
 
 
 def parse_data_input():
     global c
 
     while c < len(cmd):
-
-        if curr_char() == '\n' and c + 2 < len(cmd):
-
-            if cmd[c+1] == '.' and cmd[c+2] == '\n':
-                print(cmd[c:c+3], end='')
-                consume(3)
-                print("250 OK")
-                reset_state()
-                return
-
-        print(curr_char(), end='')
-        consume(1)
-
-    error_msg("Missing DATA terminator")
-    print_status_msg()
-    reset_state()
         
+        if cmd[c-1] == '\n' and cmd[c] == '.' and cmd[c+1] == '\n':
+            print(cmd[c:c+1])
+            consume(2)
+            print("250 OK")
+            reset_state()
+            return
+
+        else:
+            print(curr_char(), end='')
+            consume(1)
+            
 
 
 def parse_main():
@@ -252,7 +251,8 @@ def parse_main():
     global error_exists
 
     while not c >= len(cmd):
-        
+
+
         if not valid_state():
             continue
 
@@ -263,14 +263,12 @@ def parse_main():
         if not valid_state():
             continue
 
-        print(current_state)
-
         parse_rcpt_to_cmd()
         
+        print(curr_char())
+
         transition_state()
         
-        print(error_exists)
-
         if not valid_state():
             continue
         
@@ -279,11 +277,8 @@ def parse_main():
         if error_exists:
             continue
 
-        if error_exists:
-            continue
-
         parse_data_input()
-
+        
 
 def peek_cmd():
     if valid_mail_cmd():
@@ -300,13 +295,13 @@ def peek_cmd():
 
 
 def valid_state():
-    """
-    Validates the state of the program by checking what type of CMD is in the newline, by calling peek_cmd()
-    """
     global c, current_state
     start_char = c
     peek_state = peek_cmd()
     
+    if curr_char() == None:
+        return False
+
     if peek_state == INVALID_STATE:
         error_msg("500 Syntax error: command unrecognized")
         skip_to_crlf()
@@ -481,11 +476,15 @@ def parse_whitespace():
     Errors:
         If current character is not a tab or space
     """
+    if curr_char() == None:
+        error_msg("ERROR -- whitespace")
+        return
+
     if not parse_sp():
         error_msg("500 Syntax error: command unrecognized")
 
-    if valid_sp():
-        parse_whitespace()
+    while valid_sp():
+        parse_sp()
 
 
 def parse_from(): 
@@ -533,7 +532,7 @@ def parse_nullspace():
     
     If curr_char() is a <whitespace> calls parse_whitespace() to recursively consume it
     """
-    if curr_char() == ' ' or curr_char() == '\t':
+    while curr_char() == ' ' or curr_char() == '\t':
         parse_whitespace()
 
 
