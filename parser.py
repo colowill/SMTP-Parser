@@ -229,14 +229,13 @@ def parse_data_input():
 
     while c < len(cmd):
 
-        if curr_char() == '\n' and c + 2 < len(cmd):
 
-            if cmd[c+1] == '.' and cmd[c+2] == '\n':
-                print(cmd[c:c+3], end='')
-                consume(3)
-                print("250 OK")
-                reset_state()
-                return
+        if cmd[c] == '.' and cmd[c+1] == '\n':
+            print(cmd[c:c+2], end='')
+            consume(2)
+            print("250 OK")
+            reset_state()
+            return
 
         print(curr_char(), end='')
         consume(1)
@@ -263,21 +262,14 @@ def parse_main():
         if not valid_state():
             continue
 
-        print(current_state)
-
         parse_rcpt_to_cmd()
         
         transition_state()
         
-        print(error_exists)
-
         if not valid_state():
             continue
         
         parse_data_cmd()
-
-        if error_exists:
-            continue
 
         if error_exists:
             continue
