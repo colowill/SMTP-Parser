@@ -193,7 +193,7 @@ def parse_rcpt_to_cmd():
             parse_crlf()
             if error_exists:
                 skip_to_crlf()
-            error_msg("250 ok")
+            error_msg("250 OK")
             error_exists = False
 
         echo_cmd(start_index)
@@ -212,12 +212,17 @@ def parse_data_cmd():
 
     if error_exists:
         skip_to_crlf()
+        error_exists = False
+        print("here")
+        error_exists = True
     else:
         parse_crlf()
         if error_exists:
             skip_to_crlf()
-        error_msg("354 Start mail input; end with <CRLF>.<CRLF>")
-        error_exists = False
+            set_status_msg("500 Syntax error: command unrecognized")
+        else:
+            error_msg("354 Start mail input; end with <CRLF>.<CRLF>")
+            error_exists = False
     
     echo_cmd(start_index)
 
@@ -310,7 +315,7 @@ def valid_state():
         return False
 
     elif peek_state != current_state:
-        error_msg(f"503 Bad sequence of commands, reseting state to expecting MAIL FROM:")
+        error_msg(f"503 Bad sequence of commands")
         skip_to_crlf()
         echo_cmd(start_char)
         print_status_msg()
