@@ -311,12 +311,14 @@ def send_to_file(start_index):
         i+=1
 
     msg_body = "\n".join(msg_body)
-    
-    for j in range(len(forward_paths)):
-        with open("forward/" + forward_paths[j], 'w') as file:
+   
+    for j in forward_paths:
+        with open("forward/" + j, 'a') as file:
             file.write("From: <" + reverse_path + ">\n")
-            file.write("To: <" + forward_paths[j] + ">\n")
-            file.write(msg_body)
+            for k in forward_paths:
+                file.write("To: <" + k + ">\n")
+            if msg_body:
+                file.write(msg_body + '\n')
 
 
 def peek_cmd():
