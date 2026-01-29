@@ -1,16 +1,11 @@
-MAIL FROM: <jeffay@cs.unc.edu>
-MAIL FROM: <jeffay@cs.unc.edu>
-MAIL FROM: <jeffay@cs.unc.edu>
-MAIL FROM:<jeffay@cs.unc.edu>
-MAIL FROM: <jeffay@cs.unc.edu>
-MAIL FROM: <jeffay @cs.unc.edu>
-MAIL FROM: <jeffay@cs.unc.edu >
-MAIL-FROM: <jeffay@cs.unc.edu>
-MAIL FROM: < jeffay@cs.unc.edu>
-MAIL FROM: <jef fay@cs.unc.edu>
-MAIL FROM: <jeffay@ cs.unc.edu>
-MAIL FROM:<jeffay@cs.u9c.edu>
-MAIL FROM:<jeffay@cs.u9c.edu>
-MAIL FROM:<jeffay@cs.unc.edu> MAIL FROM:<jeffay@cs.unc.edu>
-MAIL FROM:<jeffay@cs.unc.edu>X
-MAIL FROM:<jeffay@cs.unc.edu>  X
+MAIL FROM:<sender@test.com>
+RCPT TO:<bad recipient>
+MAIL FROM:<good@test.com>
+RCPT TO:<valid@test.com>
+RCPT TO:<valid1@test.com>
+DATA
+Hey
+Hello
+Hi
+:)
+.

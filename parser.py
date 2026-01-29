@@ -23,7 +23,7 @@ Uncomment (2) to input from keyboard
 """
 
 """(1)"""
-cmd = sys.stdin.read()
+#cmd = sys.stdin.read()
 """(2)"""
 #cmd = input("Type an SMTP command\n")
 
@@ -248,42 +248,80 @@ def parse_data_input():
         consume(1)
 
 
+def scan_line():
+    global cmd, c, status_message, error_exists
+    
+    print("Enter SMPT command > ")
+
+    error_exists = False
+
+    while True:
+        try:
+
+            cmd = input()
+
+            cmd = cmd + '\n'
+
+            c = 0
+            status_message = "250 OK"
+
+            parse_main()
+
+        except (EOFError, KeyboardInterrupt):
+            break
+
+
 def parse_main():
     
     global error_exists, current_state
 
-    while c < len(cmd):
-        if not valid_state():
-            error_exists = False 
-            continue
+    if not valid_state():
+        error_exists = False 
+        return
 
-        if current_state == MAIL_STATE:
-            start_index = c 
-            parse_mail_from_cmd()
-            if error_exists:
-                reset_state()
-                error_exists = False
-                continue
-            else:
-                transition_state()
-        
-        elif current_state == RCPT_STATE:
-            parse_rcpt_to_cmd()
-            if error_exists:
-                reset_state()
-                error_exists = False
-                continue
-            elif not error_exists and peek_cmd() == DATA_STATE:
-                transition_state()
-
-        elif current_state == DATA_STATE:
-            parse_data_cmd()
-            if not error_exists:
-                parse_data_input()
-                send_to_file(start_index)
+    if current_state == MAIL_STATE:
+        start_index = c 
+        parse_mail_from_cmd()
+        if error_exists:
             reset_state()
+            error_exists = False
+            return
+        else:
+            transition_state()
+        
+    elif current_state == RCPT_STATE:
+        parse_rcpt_to_cmd()
+        print("yo")
+        if error_exists:
+            reset_state()
+            error_exists = False
+            return
+        elif not error_exists:
+        """
+        Hey Will in the future! This is Will from the past:
+        The commented out line below was causing the prog to not transition state, 
+        because peek_cmd() does not know what the next input is because it doesnt exist
 
-        error_exists = False
+        You need to wrap 'parse_rcp_to_cmd()' in some sort of loop that exits once next cmd isn't 'RCPT TO:'
+
+        Keep up the great work! You are doing great. I love you and stay being you!
+
+        P.S.
+        You're very quite handsome you know
+
+        - Will @ Jan 28, 2026, 11:33 PM
+        """
+        #and peek_cmd() == DATA_STATE:
+            transition_state()
+
+    elif current_state == DATA_STATE:
+        parse_data_cmd()
+        if not error_exists:
+            parse_data_input()
+            send_to_file(start_index)
+        reset_state()
+
+    error_exists = False
         
 
 def send_to_file(start_index):
@@ -833,6 +871,6 @@ def parse_reverse_path():
 
 
 try:
-    parse_main()
+    scan_line()
 except IndexError:
     print("ERROR -- msg index")
