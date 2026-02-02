@@ -14,6 +14,20 @@ Commands are constrained by the following grammar:
 <mail-from-cmd> ::= “MAIL” <whitespace> “FROM:” <nullspace> <reverse-path> <nullspace> <CRLF>
 """
 
+
+"""
+cmd (String): the file or input of SMTP commands to parse and validate
+
+Uncomment (1) to input from a file via command:  'python parse.py < <file_name.txt>'
+Uncomment (2) to input from keyboard
+"""
+
+"""(1)"""
+cmd = sys.stdin.read()
+"""(2)"""
+#cmd = input("Type an SMTP command\n")
+
+
 # Array to hold list of  dec values of special ASCII vals
 ascii_special_arr = [60, 62, 40, 41, 91, 93, 92, 46, 44, 59, 58, 64, 34]
 
@@ -25,8 +39,6 @@ status_message = "Sender ok"
 
 # Bool flag that raises when an error in the parse is detected
 error_exists = False
-
-start_index = c
 
 
 def curr_char():
@@ -60,7 +72,7 @@ def consume(num):
         num (int): Amount of characters to consume (typically 1)
     """
     global c
-    c += num
+    c+=num
 
 
 def error_msg(error_msg):
@@ -74,7 +86,7 @@ def error_msg(error_msg):
         set_status_msg(error_msg)
         error_exists = True
 
-
+    
 def set_status_msg(msg):
     """
     Helper function to set the global status_message
@@ -112,17 +124,17 @@ def skip_to_crlf():
     global c
 
     while c < len(cmd) and curr_char() != '\n':
-        c += 1
+        c+=1
 
     if c < len(cmd):
-        c += 1
+        c+=1
 
 
 def parse_mail_from_cmd():
     """
     Parser that calls recursive descent functions for 'MAIL FROM:' SMTP commands
     """
-
+        
     global error_exists
 
     start_index = c
@@ -149,20 +161,20 @@ def parse_mail_from_cmd():
         if error_exists:
             skip_to_crlf()
         error_msg("250 OK")
-
+        
     echo_cmd(start_index)
 
     print_status_msg()
 
     error_exists = False
-
+        
 
 def parse_rcpt_to_cmd():
-
+    
     global c, error_exists
-
+    
     while peek_cmd() == RCPT_STATE:
-
+        
         start_index = c
 
         parse_rcpt()
@@ -191,7 +203,7 @@ def parse_rcpt_to_cmd():
 def parse_data_cmd():
 
     global c, error_exists
-
+    
     start_index = c
 
     parse_data()
@@ -200,8 +212,8 @@ def parse_data_cmd():
 
     if error_exists:
         skip_to_crlf()
-      #  error_exists = False
-      #  print("here")
+        error_exists = False
+        print("here")
         error_exists = True
     else:
         parse_crlf()
@@ -211,102 +223,78 @@ def parse_data_cmd():
         else:
             error_msg("354 Start mail input; end with <CRLF>.<CRLF>")
             error_exists = False
-
+    
     echo_cmd(start_index)
 
     print_status_msg()
 
 
 def parse_data_input():
-    global full_msg
+    global c
     
     while True:
-        try:
-            line = input()
-            print(line)
-            full_msg += line + '\n'
-            if line == ".":
-                return
-                
-        except (EOFError, KeyboardInterrupt):
-            return
-
-
-def scan_line():
-    global cmd, c, status_message, error_exists, full_msg
-
-    if sys.stdin.isatty():
-        print("Enter SMPT command > ")
-
-    error_exists = False
-    
-
-    while True:
-        try:
-
-            cmd = input()
-
-            cmd = cmd + '\n'
-            
-            c = 0
-            
-            status_message = "250 OK"
-
-            parse_main()
-
-        except (EOFError, KeyboardInterrupt):
+        if c >= len(cmd):
             break
 
-
-full_msg = ''
+        if curr_char() == '.' and (c > 0 and cmd[c-1] == '\n'):
+            if (c + 1 < len(cmd)) and cmd[c+1] == '\n':
+                return
+        
+        print(curr_char(), end='')
+        consume(1)
 
 
 def parse_main():
-    global error_exists, current_state, start_index, full_msg
     
-    if current_state == RCPT_STATE and peek_cmd() == DATA_STATE:
-        transition_state()
+    global error_exists, current_state
+
+    while c < len(cmd):
+        if not valid_state():
+            error_exists = False 
+            continue
+
+        if current_state == MAIL_STATE:
+            start_index = c 
+            parse_mail_from_cmd()
+            if error_exists:
+                reset_state()
+                error_exists = False
+                continue
+            else:
+                transition_state()
         
-    if not valid_state():
+        elif current_state == RCPT_STATE:
+            parse_rcpt_to_cmd()
+            if error_exists:
+                reset_state()
+                error_exists = False
+                continue
+            elif not error_exists and peek_cmd() == DATA_STATE:
+                transition_state()
+
+        elif current_state == DATA_STATE:
+            parse_data_cmd()
+            if not error_exists:
+                parse_data_input()
+                #send_to_file(start_index)
+            if curr_char() == '.' and (c > 0 and cmd[c-1] == '\n'):
+                if (c + 1 < len(cmd)) and cmd[c+1] == '\n':
+                    print(".")
+                    consume(2)
+                    print("250 OK")
+                    send_to_file(start_index)
+                    reset_state()
+                    
+
         error_exists = False
-        full_msg = ''
-        return
-    
-    if current_state == MAIL_STATE:
-        start_index = c
-        parse_mail_from_cmd()
-        if not error_exists:
-            full_msg += cmd
-            transition_state()
-
-    elif current_state == RCPT_STATE:
-        parse_rcpt_to_cmd()
-        if not error_exists:
-            full_msg += cmd
-
-    elif current_state == DATA_STATE:
-        parse_data_cmd()
-        if not error_exists:
-            full_msg += cmd
-            parse_data_input()
-            print("250 OK")
-            send_to_file()
-            reset_state()
-            return
-
-    if error_exists:
-        reset_state()
-        full_msg = ''
         
-    error_exists = False
 
-
-def send_to_file():
+def send_to_file(start_index):
     """
     Takes a successful command and formats it to write to a file for email send
     """
-    cmd_array = full_msg.splitlines()
-        
+    cmd_array = cmd[start_index:c].splitlines()
+
     reverse_path = cmd_array[0].split('<')[1].split('>')[0]
 
     forward_paths = []
@@ -315,18 +303,18 @@ def send_to_file():
 
     while cmd_array[i][0:4] != "DATA":
         forward_paths.append(cmd_array[i].split('<')[1].split('>')[0])
-        i += 1
+        i+=1
 
     msg_body = []
-
-    i += 1
+    
+    i+=1
 
     while i < len(cmd_array) and cmd_array[i] != '.':
         msg_body.append(cmd_array[i])
-        i += 1
+        i+=1
 
     msg_body = "\n".join(msg_body)
-
+   
     for j in forward_paths:
         with open("forward/" + j, 'a') as file:
             file.write("From: <" + reverse_path + ">\n")
@@ -342,12 +330,10 @@ def peek_cmd():
 
     elif valid_rcpt_cmd():
         return RCPT_STATE
-
+    
     elif valid_data_cmd():
         return DATA_STATE
-    elif current_state == DATA_INPUT_STATE:
-        return DATA_INPUT_STATE
-
+    
     else:
         return INVALID_STATE
 
@@ -356,7 +342,7 @@ def valid_state():
     global c, current_state
     start_char = c
     peek_state = peek_cmd()
-
+    
     if curr_char() == None:
         return False
 
@@ -392,7 +378,7 @@ def transition_state():
     global current_state
     current_state += 1
 
-    if current_state > DATA_INPUT_STATE:
+    if current_state > DATA_STATE:
         reset_state()
 
 
@@ -408,7 +394,7 @@ def valid_mail_cmd():
     parse_whitespace()
     parse_from()
     c = temp
-
+    
     valid = not error_exists
     error_exists = temp_error_exists
 
@@ -435,7 +421,7 @@ def valid_rcpt_cmd():
 
 def valid_data_cmd():
     global c, error_exists
-
+    
     temp = c
     temp_error_exists = error_exists
     error_exists = False
@@ -450,10 +436,9 @@ def valid_data_cmd():
 MAIL_STATE = 0
 RCPT_STATE = 1
 DATA_STATE = 2
-DATA_INPUT_STATE = 3
 INVALID_STATE = -1
 
-STATES = [MAIL_STATE, RCPT_STATE, DATA_STATE, DATA_INPUT_STATE]
+STATES = [MAIL_STATE, RCPT_STATE, DATA_STATE]
 current_state = 0
 
 
@@ -493,19 +478,19 @@ def parse_rcpt():
 
 
 def parse_data():
+	"""
+    Ensures first 4 chars of a data cmd is the string 'DATA' and consumes
+
+    Errors:
+        If start of cmd is missing 'DATA' 
     """
-Ensures first 4 chars of a data cmd is the string 'DATA' and consumes
-
-Errors:
-    If start of cmd is missing 'DATA' 
-"""
-    global c
-    if not cmd[c:c+4] == "DATA":
-        error_msg("500 Syntax error: command unrecognized")
-    consume(4)
+	global c
+	if not cmd[c:c+4] == "DATA":
+		error_msg("500 Syntax error: command unrecognized")
+	consume(4)
 
 
-def valid_sp():
+def valid_sp(): 
     """
     Checks if current char is a tab or a space
 
@@ -552,7 +537,7 @@ def parse_whitespace():
         parse_sp()
 
 
-def parse_from():
+def parse_from(): 
     """
     Ensures next 5 chars after <whitespace> in <mail-from-cmd> are 'FROM:' and consumes
 
@@ -594,7 +579,7 @@ def parse_crlf():
 def parse_nullspace():
     """
     Essentially the same as parse_whitespace(), but allows null inputs
-
+    
     If curr_char() is a <whitespace> calls parse_whitespace() to recursively consume it
     """
     while curr_char() == ' ' or curr_char() == '\t':
@@ -613,7 +598,7 @@ def valid_letter(character):
     """
     ascii_val = ord(character)
 
-    return ascii_val in range(65, 91) or ascii_val in range(97, 123)
+    return ascii_val in range(65,91) or ascii_val in range(97,123)
 
 
 def parse_letter():
@@ -645,7 +630,7 @@ def parse_digit():
     """
     ascii_val = ord(curr_char())
 
-    if ascii_val in range(48, 58):
+    if ascii_val in range(48,58):
         consume(1)
         return True
 
@@ -665,7 +650,7 @@ def valid_char():
               False if not
     """
     ascii_val = ord(curr_char())
-
+    
     if ascii_val not in range(33, 127):
         return False
 
@@ -770,12 +755,11 @@ def parse_element():
     """
     global c
     if parse_letter():
-        c -= 1
+        c-=1
         parse_name()
         return True
-
+    
     return False
-
 
 def parse_domain():
     """
@@ -790,7 +774,7 @@ def parse_domain():
     """
     if not parse_element():
         return False
-
+    
     if curr_char() == '.':
         consume(1)
         return parse_domain()
@@ -809,15 +793,15 @@ def parse_mailbox():
         If <local-part> is invalid
         If '@' separator is missing
         If <domain> is invalid
-    """
+    """ 
     if not parse_local_part():
         error_msg("501 Syntax error in parameters or arguments")
-
+    
     if curr_char() == '@':
         consume(1)
-    else:
+    else: 
         error_msg("501 Syntax error in parameters or arguments")
-
+    
     if not parse_domain():
         error_msg("501 Syntax error in parameters or arguments")
 
@@ -838,7 +822,7 @@ def parse_path():
         error_msg("501 Syntax error in parameters or arguments")
     else:
         consume(1)
-
+    
     parse_mailbox()
 
     if curr_char() != '>':
@@ -851,5 +835,7 @@ def parse_reverse_path():
     parse_path()
 
 
-
-scan_line()
+try:
+    parse_main()
+except IndexError:
+    print("ERROR -- msg index")
