@@ -218,7 +218,7 @@ def parse_data_cmd():
 
 
 def parse_data_input():
-    global full_msg
+    global full_msg, error_exists
     
     while True:
         try:
@@ -226,9 +226,11 @@ def parse_data_input():
             print(line)
             full_msg += line + '\n'
             if line == ".":
+                print("250 OK")
                 return
                 
         except (EOFError, KeyboardInterrupt):
+            error_exists = True
             return
 
 
@@ -293,10 +295,11 @@ def parse_main():
         if not error_exists:
             full_msg += cmd
             parse_data_input()
-            print("250 OK")
-            send_to_file()
-            reset_state()
-            return
+            if not error_exists:
+                send_to_file()
+                reset_state()
+                full_msg = ''
+                return
 
     if error_exists:
         reset_state()
