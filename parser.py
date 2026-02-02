@@ -14,20 +14,6 @@ Commands are constrained by the following grammar:
 <mail-from-cmd> ::= “MAIL” <whitespace> “FROM:” <nullspace> <reverse-path> <nullspace> <CRLF>
 """
 
-
-"""
-cmd (String): the file or input of SMTP commands to parse and validate
-
-Uncomment (1) to input from a file via command:  'python parse.py < <file_name.txt>'
-Uncomment (2) to input from keyboard
-"""
-
-"""(1)"""
-# cmd = sys.stdin.read()
-"""(2)"""
-# cmd = input("Type an SMTP command\n")
-
-
 # Array to hold list of  dec values of special ASCII vals
 ascii_special_arr = [60, 62, 40, 41, 91, 93, 92, 46, 44, 59, 58, 64, 34]
 
@@ -232,20 +218,25 @@ def parse_data_cmd():
 
 
 def parse_data_input():
-
-    is_input_finished = False
-        
-    if cmd[c-1] == '\n' and cmd[c] == '.' and cmd[c+1 == '\n']:
-        is_input_finished = True
-                      
-    consume(1)
-    return is_input_finished
+    global full_msg
+    
+    while True:
+        try:
+            line = input()
+            print(line)
+            full_msg += line + '\n'
+            if line == ".":
+                return
+                
+        except (EOFError, KeyboardInterrupt):
+            return
 
 
 def scan_line():
     global cmd, c, status_message, error_exists, full_msg
 
-    print("Enter SMPT command > ")
+    if sys.stdin.isatty():
+        print("Enter SMPT command > ")
 
     error_exists = False
     
@@ -271,7 +262,6 @@ full_msg = ''
 
 
 def parse_main():
-
     global error_exists, current_state, start_index, full_msg
     
     if current_state == RCPT_STATE and peek_cmd() == DATA_STATE:
@@ -281,48 +271,33 @@ def parse_main():
         error_exists = False
         full_msg = ''
         return
-
+    
     if current_state == MAIL_STATE:
         start_index = c
         parse_mail_from_cmd()
-        if error_exists:
-            reset_state()
-            error_exists = False
-            return
-        else:
+        if not error_exists:
             full_msg += cmd
             transition_state()
 
     elif current_state == RCPT_STATE:
         parse_rcpt_to_cmd()
-        if error_exists:
-            reset_state()
-            error_exists = False
-        else:
+        if not error_exists:
             full_msg += cmd
-        return
 
     elif current_state == DATA_STATE:
         parse_data_cmd()
-        if error_exists:
-            reset_state()
-            error_exists = False
-        else:
+        if not error_exists:
             full_msg += cmd
-            transition_state()
-        return
-        
-    
-    elif current_state == DATA_INPUT_STATE:
-        print(cmd.removesuffix('\n'))
-        full_msg += cmd
-        if parse_data_input():
+            parse_data_input()
             print("250 OK")
-            print(full_msg)
             send_to_file()
             reset_state()
-        return
+            return
 
+    if error_exists:
+        reset_state()
+        full_msg = ''
+        
     error_exists = False
 
 
@@ -330,8 +305,8 @@ def send_to_file():
     """
     Takes a successful command and formats it to write to a file for email send
     """
-    cmd_array = cmd[start_index:c].splitlines()
-    
+    cmd_array = full_msg.splitlines()
+        
     reverse_path = cmd_array[0].split('<')[1].split('>')[0]
 
     forward_paths = []

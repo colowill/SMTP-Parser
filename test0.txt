@@ -1,0 +1,8 @@
+MAIL FROM:<valid@test.com>
+RCPT TO:<good@test.com>
+DATA
+MAIL FROM:<valid@test.com>
+MAIL FROM:<valid@test.com>
+MAIL FROM:<valid@test.com>
+Hello
+.
