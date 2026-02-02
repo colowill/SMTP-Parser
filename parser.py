@@ -233,12 +233,15 @@ def parse_data_input():
 
 
 def scan_line():
-    global cmd, c, status_message, error_exists, full_msg
+    global cmd, c, status_message, error_exists, full_msg, rcpt_count
 
     if sys.stdin.isatty():
         print("Enter SMPT command > ")
 
     error_exists = False
+    
+    
+    rcpt_count = 0
     
 
     while True:
@@ -262,9 +265,9 @@ full_msg = ''
 
 
 def parse_main():
-    global error_exists, current_state, start_index, full_msg
+    global error_exists, current_state, start_index, full_msg, rcpt_count
     
-    if current_state == RCPT_STATE and peek_cmd() == DATA_STATE:
+    if rcpt_count > 0 and peek_cmd() == DATA_STATE:
         transition_state()
         
     if not valid_state():
@@ -283,6 +286,7 @@ def parse_main():
         parse_rcpt_to_cmd()
         if not error_exists:
             full_msg += cmd
+            rcpt_count += 1
 
     elif current_state == DATA_STATE:
         parse_data_cmd()
@@ -381,8 +385,9 @@ def valid_state():
 
 
 def reset_state():
-    global current_state, error_exists
+    global current_state, error_exists, rcpt_count
     current_state = MAIL_STATE
+    rcpt_count = 0
 
 
 def transition_state():
