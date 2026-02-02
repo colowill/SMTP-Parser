@@ -40,6 +40,8 @@ status_message = "Sender ok"
 # Bool flag that raises when an error in the parse is detected
 error_exists = False
 
+start_index = c
+
 
 def curr_char():
     """
@@ -212,8 +214,8 @@ def parse_data_cmd():
 
     if error_exists:
         skip_to_crlf()
-        error_exists = False
-        print("here")
+      #  error_exists = False
+      #  print("here")
         error_exists = True
     else:
         parse_crlf()
@@ -230,23 +232,23 @@ def parse_data_cmd():
 
 
 def parse_data_input():
-    global c
 
-    while True:
-        if c >= len(cmd):
-            break
-
-        if curr_char() == '.' and (c > 0 and cmd[c-1] == '\n'):
-            if (c + 1 < len(cmd)) and cmd[c+1] == '\n':
-                return
+    is_input_finished = False
+        
+    if cmd[c-1] == '\n' and cmd[c] == '.' and cmd[c+1 == '\n']:
+        is_input_finished = True
+                      
+    consume(1)
+    return is_input_finished
 
 
 def scan_line():
-    global cmd, c, status_message, error_exists
+    global cmd, c, status_message, error_exists, full_msg
 
     print("Enter SMPT command > ")
 
     error_exists = False
+    
 
     while True:
         try:
@@ -254,8 +256,9 @@ def scan_line():
             cmd = input()
 
             cmd = cmd + '\n'
-
+            
             c = 0
+            
             status_message = "250 OK"
 
             parse_main()
@@ -264,12 +267,19 @@ def scan_line():
             break
 
 
+full_msg = ''
+
+
 def parse_main():
 
-    global error_exists, current_state
-
+    global error_exists, current_state, start_index, full_msg
+    
+    if current_state == RCPT_STATE and peek_cmd() == DATA_STATE:
+        transition_state()
+        
     if not valid_state():
         error_exists = False
+        full_msg = ''
         return
 
     if current_state == MAIL_STATE:
@@ -280,6 +290,7 @@ def parse_main():
             error_exists = False
             return
         else:
+            full_msg += cmd
             transition_state()
 
     elif current_state == RCPT_STATE:
@@ -287,46 +298,40 @@ def parse_main():
         if error_exists:
             reset_state()
             error_exists = False
-            return
-        elif not error_exists and peek_cmd() == DATA_STATE:
-            """
-        Hey Will in the future! This is Will from the past:
-        The commented out line below was causing the prog to not transition state, 
-        because peek_cmd() does not know what the next input is because it doesnt exist
-
-        You need to wrap 'parse_rcp_to_cmd()' in some sort of loop that exits once next cmd isn't 'RCPT TO:'
-
-        Keep up the great work! You are doing great. I love you and stay being you!
-
-        P.S.
-        You're very quite handsome you know
-
-        - Will @ Jan 28, 2026, 11:33 PM
-            """
-            transition_state()
+        else:
+            full_msg += cmd
+        return
 
     elif current_state == DATA_STATE:
         parse_data_cmd()
-        if not error_exists:
-            parse_data_input()
-            # send_to_file(start_index)
-        if curr_char() == '.' and (c > 0 and cmd[c-1] == '\n'):
-            if (c + 1 < len(cmd)) and cmd[c+1] == '\n':
-                print(".")
-                consume(2)
-                print("250 OK")
-                send_to_file(start_index)
-                reset_state()
+        if error_exists:
+            reset_state()
+            error_exists = False
+        else:
+            full_msg += cmd
+            transition_state()
+        return
+        
+    
+    elif current_state == DATA_INPUT_STATE:
+        print(cmd.removesuffix('\n'))
+        full_msg += cmd
+        if parse_data_input():
+            print("250 OK")
+            print(full_msg)
+            send_to_file()
+            reset_state()
+        return
 
     error_exists = False
 
 
-def send_to_file(start_index):
+def send_to_file():
     """
     Takes a successful command and formats it to write to a file for email send
     """
     cmd_array = cmd[start_index:c].splitlines()
-
+    
     reverse_path = cmd_array[0].split('<')[1].split('>')[0]
 
     forward_paths = []
@@ -365,6 +370,8 @@ def peek_cmd():
 
     elif valid_data_cmd():
         return DATA_STATE
+    elif current_state == DATA_INPUT_STATE:
+        return DATA_INPUT_STATE
 
     else:
         return INVALID_STATE
@@ -410,7 +417,7 @@ def transition_state():
     global current_state
     current_state += 1
 
-    if current_state > DATA_STATE:
+    if current_state > DATA_INPUT_STATE:
         reset_state()
 
 
@@ -468,9 +475,10 @@ def valid_data_cmd():
 MAIL_STATE = 0
 RCPT_STATE = 1
 DATA_STATE = 2
+DATA_INPUT_STATE = 3
 INVALID_STATE = -1
 
-STATES = [MAIL_STATE, RCPT_STATE, DATA_STATE]
+STATES = [MAIL_STATE, RCPT_STATE, DATA_STATE, DATA_INPUT_STATE]
 current_state = 0
 
 
@@ -868,7 +876,5 @@ def parse_reverse_path():
     parse_path()
 
 
-try:
-    scan_line()
-except IndexError:
-    print("ERROR -- msg index")
+
+scan_line()
