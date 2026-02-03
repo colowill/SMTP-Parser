@@ -11,7 +11,7 @@
 
 <p>SMTP is the protocol used by email clients and servers to <strong>send email messages</strong> across the internet.</p>
 
-<h2>🚀 Features</h2>
+<h2>Features</h2>
 <ul>
     <li>Parses SMTP commands such as <code>MAIL FROM</code>, <code>RCPT TO</code>, and <code>DATA</code></li>
     <li>Implements <strong>recursive descent parsing</strong> to process commands according to protocol grammar</li>
@@ -20,11 +20,9 @@
     <li>Helps validate SMTP input for testing or educational use</li>
 </ul>
 
-<h2>🛠️ How It Works</h2>
-<p>This parser uses <strong>recursive descent parsing</strong> to analyze SMTP commands and tracks the connection state using a state machine. Commands that don’t match the expected syntax or sequence are rejected.</p>
 
 
-<h2>📚 Protocol Grammar</h2>
+<h2>Protocol Grammar</h2>
 <pre>
 &lt;mail-from-cmd&gt; → “MAIL” &lt;whitespace&gt; “FROM:” &lt;nullspace&gt; &lt;reverse-path&gt;
 &lt;nullspace&gt; → &lt;null&gt; | &lt;whitespace&gt;
@@ -55,7 +53,7 @@
 </pre>
 
 
-<h2>📦 Requirements</h2>
+<h2>Dependencies</h2>
 <ul>
     <li>Python 3.x</li>
 </ul>
