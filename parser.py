@@ -1,5 +1,4 @@
 import sys
-import string
 
 """
 @author: Will Minor
@@ -16,9 +15,6 @@ Commands are constrained by the following grammar:
 # C (int): Index of the current character being evaluated by the parser
 c = 0
 
-# status_message (Str): Hold scurrent status message of a parse, will change to an error code
-status_message = "250 OK"
-
 # error_exists (Bool): Flag that raises when an error is detected
 error_exists = False
 
@@ -26,6 +22,31 @@ start_index = c
 
 # full_msg (Str): Prog appends valid SMTP commands to this var, which is then used to send a valid message to the /forward subdirectory
 full_msg = ''
+
+"""
+Status and error message constants used by the SMTP parser.
+
+STATUS_OK:
+    Returned when a command is successfully parsed and accepted.
+
+ERROR_500:
+    Returned when the command verb is unrecognized or improperly formatted
+    (e.g., misspelled MAIL, RCPT, or DATA).
+
+ERROR_501:
+    Returned when a command’s arguments violate grammar rules
+    (e.g., malformed reverse-path or forward-path such as MAIL FROM:<<user@email.com>).
+
+ERROR_503:
+    Returned when commands are issued in an invalid sequence
+    (e.g., DATA before RCPT, or RCPT before MAIL).
+"""
+STATUS_OK = "250 OK"
+ERROR_500 = "500 Syntax error: command unrecognized"
+ERROR_501 = "501 Syntax error in parameters or arguments"
+ERROR_503 = "503 Bad sequence of commands"
+
+status_message = STATUS_OK
 
 
 def curr_char():
@@ -146,7 +167,7 @@ def parse_mail_from_cmd():
         parse_crlf()
         if error_exists:
             skip_to_crlf()
-        error_msg("250 OK")
+        error_msg(STATUS_OK)
 
     echo_cmd(start_index)
 
@@ -181,7 +202,7 @@ def parse_rcpt_to_cmd():
             parse_crlf()
             if error_exists:
                 skip_to_crlf()
-            error_msg("250 OK")
+            error_msg(STATUS_OK)
             error_exists = False
 
         echo_cmd(start_index)
@@ -209,7 +230,7 @@ def parse_data_cmd():
         parse_crlf()
         if error_exists:
             skip_to_crlf()
-            set_status_msg("500 Syntax error: command unrecognized")
+            set_status_msg(ERROR_500)
         else:
             error_msg("354 Start mail input; end with <CRLF>.<CRLF>")
             error_exists = False
@@ -224,16 +245,16 @@ def parse_data_input():
     Reads DATA input lines until a single '.' is encountered
     """
     global full_msg, error_exists
-    
+
     while True:
         try:
             line = input()
             print(line)
             full_msg += line + '\n'
             if line == ".":
-                print("250 OK")
+                print(STATUS_OK)
                 return
-                
+
         except (EOFError, KeyboardInterrupt):
             error_exists = True
             return
@@ -244,7 +265,7 @@ def send_to_file():
     Takes a successful message and formats it to write to a file for email send. Sends these valid messages to /forward subdirectory
     """
     cmd_array = full_msg.splitlines()
-        
+
     reverse_path = cmd_array[0].split('<')[1].split('>')[0]
 
     forward_paths = []
@@ -277,7 +298,7 @@ def send_to_file():
 def scan_line():
     """
     Main input loop that triggers the parser until input is no longer detected, parses by newlines
-    
+
     Calls parse_main() to perform recursive parsing
     """
     global cmd, c, status_message, error_exists, full_msg, rcpt_count
@@ -286,7 +307,7 @@ def scan_line():
         print("Enter SMPT command > ")
 
     error_exists = False
-    
+
     # rcpt_count (int): Counts the amount of RCPT commands in a single valid message
     rcpt_count = 0
 
@@ -296,10 +317,10 @@ def scan_line():
             cmd = input()
 
             cmd = cmd + '\n'
-            
+
             c = 0
-            
-            status_message = "250 OK"
+
+            status_message = STATUS_OK
 
             parse_main()
 
@@ -310,27 +331,26 @@ def scan_line():
 def parse_main():
     """
     State machine traffic controller for accepted language
-    
+
     Requires:
     1 valid MAIL cmd -> 1 or more valid RCPT cmds -> 1 valid DATA cmd -> 0 or more newlines of message input, followed by a single '.'
-    
+
     If this rule is violated at any point, it resets to awaiting for a valid MAIL cmd
-    
+
     A successful message parse sends mail to /forward directory
     """
     global error_exists, current_state, start_index, full_msg, rcpt_count
-    
+
     if rcpt_count > 0 and peek_cmd() == DATA_STATE:
         transition_state()
-        
+
     if not valid_state():
         error_exists = False
-        full_msg = ''
         reset_state()
         return
-    
+
     match current_state:
-        
+
         case _ if current_state == MAIL_STATE:
             start_index = c
             parse_mail_from_cmd()
@@ -352,20 +372,33 @@ def parse_main():
                 if not error_exists:
                     send_to_file()
                     reset_state()
-                    full_msg = ''
                     return
 
     if error_exists:
         reset_state()
-        full_msg = ''
-        
+
     error_exists = False
+
+
+MAIL_STATE = 0
+RCPT_STATE = 1
+DATA_STATE = 2
+INVALID_STATE = -1
+
+STATES = [MAIL_STATE, RCPT_STATE, DATA_STATE]
+current_state = 0
 
 
 def peek_cmd():
     """
-    Determines what type of cmd is about to parsed
+    Determines the type of SMTP command that appears next in the input stream.
+
+    Uses valid_<type>_cmd() helper functions to determine validity without consuming input
+
+    Returns:
+        int: One of the defined state constants
     """
+
     if valid_mail_cmd():
         return MAIL_STATE
 
@@ -374,15 +407,21 @@ def peek_cmd():
 
     elif valid_data_cmd():
         return DATA_STATE
-    
-    elif current_state == DATA_INPUT_STATE:
-        return DATA_INPUT_STATE
 
     else:
         return INVALID_STATE
 
 
 def valid_state():
+    """
+    Validates that the next command is permitted in the current state.
+
+    If invalid, errors out
+
+    Returns:
+        bool: True if the command is valid for the current state,
+              False otherwise.
+    """
     global c, current_state
     start_char = c
     peek_state = peek_cmd()
@@ -391,7 +430,7 @@ def valid_state():
         return False
 
     if peek_state == INVALID_STATE:
-        error_msg("500 Syntax error: command unrecognized")
+        error_msg(ERROR_500)
         skip_to_crlf()
         echo_cmd(start_char)
         print_status_msg()
@@ -409,9 +448,13 @@ def valid_state():
 
 
 def reset_state():
-    global current_state, error_exists, rcpt_count
+    """
+    Resets state machine to it's initial state
+    """
+    global current_state, rcpt_count, full_msg
     current_state = MAIL_STATE
     rcpt_count = 0
+    full_msg = ''
 
 
 def transition_state():
@@ -421,7 +464,7 @@ def transition_state():
     global current_state
     current_state += 1
 
-    if current_state > DATA_INPUT_STATE:
+    if current_state > DATA_STATE:
         reset_state()
 
 
@@ -476,16 +519,6 @@ def valid_data_cmd():
     return valid
 
 
-MAIL_STATE = 0
-RCPT_STATE = 1
-DATA_STATE = 2
-DATA_INPUT_STATE = 3
-INVALID_STATE = -1
-
-STATES = [MAIL_STATE, RCPT_STATE, DATA_STATE, DATA_INPUT_STATE]
-current_state = 0
-
-
 def valid_mail():
     """
     Validates that the first 4 characters of MAIL FROM cmd are 'MAIL'
@@ -504,7 +537,7 @@ def parse_mail():
         If start of cmd is missing 'MAIL' 
     """
     if not valid_mail():
-        error_msg("500 Syntax error: command unrecognized")
+        error_msg(ERROR_500)
     consume(4)
 
 
@@ -517,7 +550,7 @@ def parse_rcpt():
     """
     global c
     if not cmd[c:c+4] == "RCPT":
-        error_msg("500 Syntax error: command unrecognized")
+        error_msg(ERROR_500)
     consume(4)
 
 
@@ -530,7 +563,7 @@ Errors:
 """
     global c
     if not cmd[c:c+4] == "DATA":
-        error_msg("500 Syntax error: command unrecognized")
+        error_msg(ERROR_500)
     consume(4)
 
 
@@ -575,7 +608,7 @@ def parse_whitespace():
         return
 
     if not parse_sp():
-        error_msg("500 Syntax error: command unrecognized")
+        error_msg(ERROR_500)
 
     while valid_sp():
         parse_sp()
@@ -590,7 +623,7 @@ def parse_from():
     """
     global c
     if not cmd[c:c+5] == "FROM:":
-        error_msg("500 Syntax error: command unrecognized")
+        error_msg(ERROR_500)
     consume(5)
 
 
@@ -603,7 +636,7 @@ def parse_to():
     """
     global c
     if not cmd[c:c+3] == "TO:":
-        error_msg("500 Syntax error: command unrecognized")
+        error_msg(ERROR_500)
     consume(3)
 
 
@@ -615,7 +648,7 @@ def parse_crlf():
         If the command line does not terminate with CRLF
     """
     if curr_char() != '\n':
-        error_msg("501 Syntax error in parameters or arguments")
+        error_msg(ERROR_501)
     else:
         consume(1)
 
@@ -695,7 +728,7 @@ def valid_char():
     """
     # Array to hold list of  dec values of special ASCII vals
     ascii_special_arr = [60, 62, 40, 41, 91, 93, 92, 46, 44, 59, 58, 64, 34]
-    
+
     ascii_val = ord(curr_char())
 
     if ascii_val not in range(33, 127):
@@ -843,15 +876,15 @@ def parse_mailbox():
         If <domain> is invalid
     """
     if not parse_local_part():
-        error_msg("501 Syntax error in parameters or arguments")
+        error_msg(ERROR_501)
 
     if curr_char() == '@':
         consume(1)
     else:
-        error_msg("501 Syntax error in parameters or arguments")
+        error_msg(ERROR_501)
 
     if not parse_domain():
-        error_msg("501 Syntax error in parameters or arguments")
+        error_msg(ERROR_501)
 
 
 def parse_path():
@@ -867,21 +900,20 @@ def parse_path():
         If closing '>' is missing
     """
     if curr_char() != '<':
-        error_msg("501 Syntax error in parameters or arguments")
+        error_msg(ERROR_501)
     else:
         consume(1)
 
     parse_mailbox()
 
     if curr_char() != '>':
-        error_msg("501 Syntax error in parameters or arguments")
+        error_msg(ERROR_501)
     else:
         consume(1)
 
 
 def parse_reverse_path():
     parse_path()
-
 
 
 scan_line()
