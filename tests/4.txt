@@ -1,0 +1,15 @@
+MAIL FROM:<good@test.com>
+MAIL FROM:<good@test.com>
+MAIL FROM:<good@test.com>
+RCPT TO:<valid@test.com>
+MAIL FROM:<good@test.com>
+MAIL FROM:<good@test.com>
+RCPT TO:<valid1@test.com>
+RCPT TO:<valid1@test.com>
+RCPT TO:<valid1@test.com>
+DATA
+Hey
+Hello
+Hi
+:)
+.

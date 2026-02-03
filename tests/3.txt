@@ -1,0 +1,4 @@
+MAIL FROM:<sender@test.com>
+RCPT TO:<recipient@test.com>
+DATA
+This message has no terminating period.

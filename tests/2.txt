@@ -1,0 +1,2 @@
+MAIL FROM:<sender@test.com>
+DATA
