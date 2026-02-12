@@ -5,45 +5,43 @@ def smtp_response():
     """
     Main function call to generate server responses to SMTP messages in the /forward subdirectory
     """
-    forward_files = os.listdir('forward')
+    if len(sys.argv) < 2:
+        sys.exit(1)
 
-    forward_files.extend(os.listdir())
+    file_name = sys.argv[1]
 
-    files_not_to_parse = ['SMTP1.py', 'SMTP2.py', 'tests', 'forward']
+    if not os.path.exists(file_name):
+        sys.exit(1)
 
-    for file in forward_files[:]:
-        if file in files_not_to_parse:
-            forward_files.remove(file)
+    with open(file_name, 'r') as file:
+        input_data = file.read().splitlines()
 
-    if not forward_files:
-        exit('QUIT')
+    if not input_data:
+        sys.exit(1)
 
-    for file in forward_files:
-        msg_arr = read_from_file(file)
-        #print("Parsing ", file)
-        msg_arr = process_msg(msg_arr)
-        #print(msg_arr)
+    msg_arr = process_msg(input_data)
+    for line in msg_arr:
 
-        for line in msg_arr:
+        print(line)
+        server_response = sys.stdin.readline()
 
-            print(line)
-            server_response = sys.stdin.readline()
-            sys.stderr.write(server_response)
+        cmd_type = determine_cmd(line)
             
-            cmd_type = determine_cmd(line)
-            
-            sys.stderr.write(server_response)
-            sys.stderr.flush()
+        sys.stderr.write(server_response)
+        sys.stderr.flush()
 
-            if cmd_type in [FROM_CMD, TO_CMD] or line[-1] == '.':
-                if parse_server_response(server_response) != '250':
-                    exit('QUIT')
+        if cmd_type in [FROM_CMD, TO_CMD] or line[-1] == '.':
+            if parse_server_response(server_response) != '250':
+                sys.stdout.write('QUIT\n')
+                sys.exit(1)
 
-            elif cmd_type == DATA_CMD:
-                if parse_server_response(server_response) != '354':
-                    exit('QUIT')
+        elif cmd_type == DATA_CMD:
+            if parse_server_response(server_response) != '354':
+                sys.stdout.write('QUIT\n')
+                sys.exit(1)
 
-
+    sys.stdout.write('QUIT\n')
+    sys.exit(0)
                 
 
 def read_from_file(filename):
@@ -73,24 +71,24 @@ def process_msg(msg_array):
     for line in msg_array:
         cmd_type = determine_cmd(line)
         
-        # If the array body_content is not empty
         if cmd_type == FROM_CMD or cmd_type == TO_CMD:
-            
+
             if data_content:
                 updated_msg_array.append("DATA")
                 data_content.append('.')
                 updated_msg_array.append('\n'.join(data_content))
-
+                data_content.clear()
+            
             cmd_prefix = 'MAIL FROM: ' if cmd_type == FROM_CMD else 'RCPT TO: ' 
             updated_msg_array.append(cmd_prefix + get_address(line))
 
         elif cmd_type ==  DATA_CMD:
             data_content.append(line)
 
-    if data_content:
-        updated_msg_array.append("DATA")
-        data_content.append('.')
-        updated_msg_array.append('\n'.join(data_content))
+    #if data_content:
+    updated_msg_array.append("DATA")
+    data_content.append('.')
+    updated_msg_array.append('\n'.join(data_content))
 
     return updated_msg_array
 
